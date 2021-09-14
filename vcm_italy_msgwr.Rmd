@@ -1,0 +1,165 @@
+---
+title: "MS-GWR Analyses with the Italian Data"
+author:
+  - Nicolas Kuehn^[Unversity of California, Los Angeles, kuehn@ucla.edu]
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+  #pdf_document:
+  keep_md: true
+toc: true
+toc_depth: 2
+number_sections: true
+highlight: tango
+link-citations: yes
+linkcolor: blue
+citecolor: blue
+urlcolor: blue
+bibliography: /Users/nico/BIBLIOGRAPHY/BIBTEX/references.bib
+---
+  
+  
+  ```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=8, fig.asp = 0.8, out.width = '50%', fig.show="hold",
+                      fig.path = 'pictures/',
+                      root.dir = '/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/Git/NonErgGMM_Italy')
+```
+
+# Introduction
+
+This code contains the code to calculate the MS-GWR analyses.
+The code mostly follows mostly @Caramenti2020, available at <{https://github.com/lucaramenti/ms-gwr/>.
+
+# Getting Started
+
+```{r load-libraries, warning=FALSE, message=FALSE}
+# load required packages
+library(lme4)
+library(sf)
+library(raster)
+library(rgdal)
+library(GWmodel)
+library(ggplot2)
+library(tictoc)
+
+source(file.path("R_Caramenti", "functions.R"))
+source(file.path("R_Caramenti", "predict_new.R"))
+```
+
+``` {r prepare-data}
+# read in data file with event and station ids
+# corrected for Vs30 differences between stations of same location
+data <- read.csv(file.path('DATA', 'italian_data_pga_id_utm_stat.csv'))
+print(dim(data))
+data <- data[1:1000,]
+
+# Set linear predictors
+mh = 5.5
+mref = 5.324
+h = 6.924
+attach(data)
+b1 = (mag-mh)*(mag<=mh)
+b2 = (mag-mh)*(mag>mh)
+c1 = (mag-mref)*log10(sqrt(JB_complete^2+h^2))
+c2 = log10(sqrt(JB_complete^2+h^2))
+c3 = sqrt(JB_complete^2+h^2)
+f1 = as.numeric(fm_type_code == "SS")
+f2 = as.numeric(fm_type_code == "TF")
+k = log10(vs30/800)*(vs30<=1500)+log10(1500/800)*(vs30>1500)
+y = log10(rotD50_pga)
+detach(data)
+
+eq <- data$EQID
+stat <- data$STATID
+n_rec <- length(b1)
+n_eq <- max(eq)
+n_stat <- max(stat)
+
+# spatial coordinates
+shape_utm = st_read(file.path("DATA",'confini_ut33.shp'))
+
+shape_utm_no_lamp = shape_utm
+shape_utm_no_lamp$geometry[[1]][[12]] = NULL
+
+shape_utm_no_sardinia = shape_utm
+shape_utm_no_sardinia$geometry[[1]][[3]] = NULL
+for (i in 4:10){
+  shape_utm_no_sardinia$geometry[[1]][[4]] = NULL
+}
+for (i in 12:57){
+  shape_utm_no_sardinia$geometry[[1]][[5]] = NULL
+}
+
+#Project coordinates of the events to work with UTM33:
+latitude_ev = data$ev_latitude
+longitude_ev = data$ev_longitude
+long_lat_ev = cbind(longitude_ev, latitude_ev)
+utm_ev = project(long_lat_ev, "+proj=utm +zone=33 ellps=WGS84") 
+utm_ev = as.data.frame(utm_ev)
+long_lat_ev = as.data.frame(long_lat_ev)
+
+#Project coordinates of the stations to work with UTM33:
+latitude_st = data$st_latitude
+longitude_st = data$st_longitude
+long_lat_st = cbind(longitude_st, latitude_st)
+utm_st = project(long_lat_st, "+proj=utm +zone=33 ellps=WGS84") 
+utm_st = as.data.frame(utm_st)
+long_lat_st = as.data.frame(long_lat_st)
+
+#Build spatial points data frame for UTM33 coordinates:
+utm_ev_sp = SpatialPointsDataFrame(utm_ev, data[,1:7])
+utm_st_sp = SpatialPointsDataFrame(utm_st, data[,1:7])
+
+#Transform shapefile into spatial dataframe:
+shape_utm_spatial = as_Spatial(shape_utm_no_sardinia)
+grid_utm = makegrid(shape_utm_spatial, cellsize = 10000) # cellsize in map units!
+grid_utm = SpatialPoints(grid_utm, proj4string = CRS(proj4string(shape_utm_spatial)))
+grid_inside_utm = grid_utm[shape_utm_spatial,]
+coords_utm = grid_inside_utm@coords
+
+#Transform shapefile into spatial dataframe:
+shape_utm_spatial = as_Spatial(shape_utm_no_sardinia)
+grid_utm = makegrid(shape_utm_spatial, cellsize = 10000) # cellsize in map units!
+grid_utm = SpatialPoints(grid_utm, proj4string = CRS(proj4string(shape_utm_spatial)))
+```
+
+Set design matrices for constant, event, and site related coefficients.
+
+``` {r design-matrix}
+Xc = cbind(b1,b2,f1,f2,c1)
+Xe = cbind(c2,c3)
+Xs = k
+
+# best bandwidth is set
+bwe = 25000
+bws = 75000
+coords_df_utm = as.data.frame(coords_utm)
+```
+
+``` {r ms-gwr, cache = TRUE, echo = FALSE}
+tic()
+sec = SEC_only_calibration(Xc, Xe, Xs, y, "c", bwe, bws, coordinates(utm_ev_sp), coordinates(utm_st_sp))
+toc()
+
+#Now we can compute all the regression coefficients:
+result = SEC_grid_creation(Xc, Xe, Xs, y,"c", bwe, bws, coordinates(utm_ev_sp),
+                           coordinates(utm_st_sp), coords_utm, sec)
+beta_const = result$beta_c
+
+beta_k = t(result$beta_s)
+beta_k_coord = cbind(coords_utm, beta_k)
+beta_k_coord = as.data.frame(beta_k_coord)
+
+beta_c2 = result$beta_e[1,]
+beta_c2_coord = cbind(coords_utm, beta_c2)
+beta_c2_coord = as.data.frame(beta_c2_coord)
+
+beta_c3 = result$beta_e[2,]
+beta_c3_coord = cbind(coords_utm, beta_c3)
+beta_c3_coord = as.data.frame(beta_c3_coord)
+
+
+save(sec, result, file = file.path('RESULTS', 'results_caramenti_tmp.Rdata'))
+```
+
+# References

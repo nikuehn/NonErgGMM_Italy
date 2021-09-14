@@ -27,36 +27,9 @@ knitr::opts_chunk$set(echo = TRUE, fig.width=8, fig.asp = 0.8, out.width = '50%'
 
 # Introduction
 
-In recent years, there has been a push to relax the ergodic assumption [@Anderson1999] in the development of empirical ground-motion models (GMMs).
-Loosely speaking, the ergodic assumption says that one can trade time for space, and that the ground-motion distribution a a particular site is the same as the ground-motion distribution average over many sites.
-This means that an ergodic GMM ignores repeatable systematic source, path, and site effects.
-Due to increasing numbers of observed data, it is possible to estimate these effects.
-Much has been written about nonergodic GMMs and their use in probabilistic seismic hazard analysis (PSHA).
-For a schematic overview of nonergodic PSHA, see e.g. @Villani2015 or @Walling2012.
-@Abrahamson2019 conducted a nonergodic PSHA for three sites in California, and showed that there can be large differences in PSHA results due to the inclusion of nonergodic effects on ground motion.
-
-@Landwehr2016 introduced the concept of spatially varying coefficient models (VCMs) [@Gelfand2003;@Bussas2017] to the estimation of nonergodic GMMs.
-In a VCM, several coefficients are functions of location, thus encoding spatial variation of ground-motion scaling.
-In the model of @Landwehr2016, the spatially varying coefficients are assumed to be spatially correlated, which enables their estimation, as well as extrapolation to new location,
-More precisely, the varying coefficients are assumed to be distributed according to a Gaussian process (GP) [@Rasmussen2006].
-The GP can be understood as a prior distribution over the functional form of the spatial dependence of the coefficients, with the covariance function providing some constraints on the shape of the function.
-In @Landwehr2016, the model was estimated using the Matlab GPML package [@Rasmussen2010], using the FITC approximation [@Snelson2005] to the covariance matrix to make the model computationally tractable.
-@Kuehn2021 showed how VCMs based on GPs can be estimated via Bayesian inference, using Markov Chain Monte Carlo (MCMC) sampling using he computer language Stan [@Carpenter2016], and the _integrated nested Laplace approximation_ INLA) [@Rue2009].
-Results showed that both approaches give comparable results, with INLA being faster.
-Several studies have estimated nonergodic GMMs based on GP VCMs [@Lavrentiadis2021] have been estimated recently.
-
-Recently, @Caramenti2020 introduced an alternative to GPs for the estimation of spatially varying GMMs, based on geographically weighted regression (GWR) [@Fotheringham2002], called multi-source geographically weighted regression (MS-GWR).
-They showed an example based on Italian strong motion (PGA) data, using the ITA2018 GMM [@Lanzano2019] as a reference.
-@Lanzano2021 investigated MS-GWR further, extending the model to different response spectral periods.
-They found that the MS-GWR model provides an improvement in terms of predictive accuracy over a linear base model
-
-GWR and GP based VCMs are based on different underlying assumptions, which naturally raises the question how they compare.
-In GMM development, epistemic uncertainty is large (in particular for nonergodic models), so there is value in having different models based on different methods.
-GWR constructs local models for different locations, based on weighting data according to their distance to the location.
-The weights are determined by a spatial kernel.
-By contrast, GP based models assume an underlying functional dependence of the spatial coefficients, and place a GP prior on the functions.
-
-Here, we fit different spatial models with INLA, and compare the fit to an ergodic base model, as well as the model of @Caramenti2020.
+This documet contains code to calculate different nonrgodic ground-motion models (GMMs) using INLA on ground-motion data in Italy.
+The data set is the same as the one used by @Caramenti2020, and contains the Italian data of th ITA18 GMM [@Lanzano2019].
+The models are compared between themselves, as well as with the MS-GWR model of @Caramento2020.
 
 
 # Getting Started
@@ -194,8 +167,8 @@ grid_inside_utm = grid_utm[shape_utm_spatial,]
 coords_utm = grid_inside_utm@coords
 coords_df_utm = as.data.frame(coords_utm)
 
-# read n data file with event and station ids
-# correcte for Vs30 differences between stations of same location
+# read in data file with event and station ids
+# corrected for Vs30 differences between stations of same location
 data <- read.csv(file.path('DATA', 'italian_data_pga_id_utm_stat.csv'))
 #### Cell-specific distances are computed outside of R
 data_dm <- rstan::read_rdump(file.path('DATA', 'dm_25x25.Rdata'))
