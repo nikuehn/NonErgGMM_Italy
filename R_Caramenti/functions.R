@@ -1299,6 +1299,7 @@ SEC_only_calibration = function(Xc, Xe, Xs, y,intercept, bwe, bws, utm_ev_sp, ut
     As = (solve((t(Xs)%*%Ws%*%Xs))) %*% t(Xs) %*% Ws
     Hs[i,] = Xs[i,] %*% As
     print(c("Hs",i))
+    #print(c("Hs",i))
   }
   
   #create He
@@ -1307,6 +1308,7 @@ SEC_only_calibration = function(Xc, Xe, Xs, y,intercept, bwe, bws, utm_ev_sp, ut
     Ae = (solve((t(Xe)%*%(t((I-Hs)))%*%We%*%(I-Hs)%*%Xe))) %*% t(Xe) %*% (t((I-Hs))) %*% We %*% (I-Hs)
     He[i,] = Xe[i,] %*% Ae
     print(c("He",i))
+    #print(c("He",i))
   }
   
   #create B
@@ -1459,6 +1461,7 @@ SEC_grid_creation = function(Xc, Xe, Xs, y,intercept, bwe, bws, utm_ev_sp, utm_s
     Ae = (solve((t(Xe)%*%(t((I-Hs)))%*%We%*%(I-Hs)%*%Xe))) %*% t(Xe) %*% (t((I-Hs))) %*% We %*% (I-Hs)
     beta_e[,i] = Ae %*% y_tilde
     print(c("beta_e",i))
+    #print(c("beta_e",i))
   }
   
   #4)compute y_tilde_s
@@ -1470,6 +1473,7 @@ SEC_grid_creation = function(Xc, Xe, Xs, y,intercept, bwe, bws, utm_ev_sp, utm_s
     As = (solve((t(Xs)%*%Ws%*%Xs))) %*% t(Xs) %*% Ws
     beta_s[,i] = As %*% y_tilde_s
     print(c("beta_s",i))
+    #print(c("beta_s",i))
   }
   
   betas <- list("beta_c" = beta_c, 

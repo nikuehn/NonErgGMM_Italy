@@ -369,13 +369,19 @@ library(lme4)
 library(sf)
 library(raster)
 library(rgdal)
+library(GWmodel)
+library(psych)
 library(ggplot2)
-library(tictoc)</code></pre>
+library(tictoc)
+
+source(file.path(&quot;R_Caramenti&quot;, &quot;functions.R&quot;))
+source(file.path(&quot;R_Caramenti&quot;, &quot;predict_new.R&quot;))</code></pre>
 <pre class="r"><code># read in data file with event and station ids
 # corrected for Vs30 differences between stations of same location
 data &lt;- read.csv(file.path(&#39;DATA&#39;, &#39;italian_data_pga_id_utm_stat.csv&#39;))
-
-# Set linear predictors
+print(dim(data))</code></pre>
+<pre><code>## [1] 4784   16</code></pre>
+<pre class="r"><code># Set linear predictors
 mh = 5.5
 mref = 5.324
 h = 6.924
@@ -398,7 +404,6 @@ n_eq &lt;- max(eq)
 n_stat &lt;- max(stat)
 
 # spatial coordinates
-dataset = readRDS(file.path(&quot;DATA&quot;,&quot;italian_data_pga.RData&quot;))
 shape_utm = st_read(file.path(&quot;DATA&quot;,&#39;confini_ut33.shp&#39;))</code></pre>
 <pre><code>## Reading layer `confini_ut33&#39; from data source 
 ##   `/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/Git/NonErgGMM_Italy/DATA/confini_ut33.shp&#39; 
@@ -421,24 +426,24 @@ for (i in 12:57){
 }
 
 #Project coordinates of the events to work with UTM33:
-latitude_ev = dataset$ev_latitude
-longitude_ev = dataset$ev_longitude
+latitude_ev = data$ev_latitude
+longitude_ev = data$ev_longitude
 long_lat_ev = cbind(longitude_ev, latitude_ev)
 utm_ev = project(long_lat_ev, &quot;+proj=utm +zone=33 ellps=WGS84&quot;) 
 utm_ev = as.data.frame(utm_ev)
 long_lat_ev = as.data.frame(long_lat_ev)
 
 #Project coordinates of the stations to work with UTM33:
-latitude_st = dataset$st_latitude
-longitude_st = dataset$st_longitude
+latitude_st = data$st_latitude
+longitude_st = data$st_longitude
 long_lat_st = cbind(longitude_st, latitude_st)
 utm_st = project(long_lat_st, &quot;+proj=utm +zone=33 ellps=WGS84&quot;) 
 utm_st = as.data.frame(utm_st)
 long_lat_st = as.data.frame(long_lat_st)
 
 #Build spatial points data frame for UTM33 coordinates:
-utm_ev_sp = SpatialPointsDataFrame(utm_ev, dataset[,1:6])
-utm_st_sp = SpatialPointsDataFrame(utm_st, dataset[,1:6])
+utm_ev_sp = SpatialPointsDataFrame(utm_ev, data[,1:7])
+utm_st_sp = SpatialPointsDataFrame(utm_st, data[,1:7])
 
 #Transform shapefile into spatial dataframe:
 shape_utm_spatial = as_Spatial(shape_utm_no_sardinia)
@@ -450,14 +455,11 @@ grid_utm = SpatialPoints(grid_utm, proj4string = CRS(proj4string(shape_utm_spati
 coords_utm = grid_inside_utm@coords
 
 #Transform shapefile into spatial dataframe:
-tic()
 shape_utm_spatial = as_Spatial(shape_utm_no_sardinia)
 grid_utm = makegrid(shape_utm_spatial, cellsize = 10000) # cellsize in map units!
 grid_utm = SpatialPoints(grid_utm, proj4string = CRS(proj4string(shape_utm_spatial)))</code></pre>
 <pre><code>## Warning in proj4string(shape_utm_spatial): CRS object has comment, which is lost
 ## in output</code></pre>
-<pre class="r"><code>toc()</code></pre>
-<pre><code>## 0.062 sec elapsed</code></pre>
 <p>Set design matrices for constant, event, and site related coefficients.</p>
 <pre class="r"><code>Xc = cbind(b1,b2,f1,f2,c1)
 Xe = cbind(c2,c3)
@@ -467,6 +469,158 @@ Xs = k
 bwe = 25000
 bws = 75000
 coords_df_utm = as.data.frame(coords_utm)</code></pre>
+<pre class="r"><code>tic()
+sec = SEC_only_calibration(Xc, Xe, Xs, y, &quot;c&quot;, bwe, bws, coordinates(utm_ev_sp), coordinates(utm_st_sp))
+toc()</code></pre>
+<pre><code>## 85.777 sec elapsed</code></pre>
+<pre class="r"><code>#Now we can compute all the regression coefficients:
+result = SEC_grid_creation(Xc, Xe, Xs, y,&quot;c&quot;, bwe, bws, coordinates(utm_ev_sp),
+                           coordinates(utm_st_sp), coords_utm, sec)
+beta_const = result$beta_c
+
+beta_k = t(result$beta_s)
+beta_k_coord = cbind(coords_utm, beta_k)
+beta_k_coord = as.data.frame(beta_k_coord)
+
+beta_c2 = result$beta_e[1,]
+beta_c2_coord = cbind(coords_utm, beta_c2)
+beta_c2_coord = as.data.frame(beta_c2_coord)
+
+beta_c3 = result$beta_e[2,]
+beta_c3_coord = cbind(coords_utm, beta_c3)
+beta_c3_coord = as.data.frame(beta_c3_coord)
+
+
+save(sec, result, file = file.path(&#39;RESULTS&#39;, &#39;results_caramenti.Rdata&#39;))</code></pre>
+<p>Calculate prediction for the data set.</p>
+<pre class="r"><code>pcoords = as.data.frame(cbind(coordinates(utm_ev_sp), coordinates(utm_st_sp)))
+tic()
+prediction_msgwr &lt;- emgwr_prediction_points_no_param2(Xc, Xe, Xs, y, sec, &quot;sec&quot;, bwe, bws,
+                                                      coordinates(utm_ev_sp), coordinates(utm_st_sp), Xc, Xe, Xs,
+                                                      pcoords, 0.05)
+toc()</code></pre>
+<pre><code>## 157.782 sec elapsed</code></pre>
+<pre class="r"><code>save(prediction_msgwr, file = file.path(&#39;RESULTS&#39;, &#39;residuals_caramenti.Rdata&#39;))</code></pre>
+<p>Calculate prediction for one event in Middle Italy, with directions to North and South.</p>
+<pre class="r"><code>data_pred &lt;- read.csv(file.path(&quot;DATA&quot;, &quot;data_prediction_line.csv&quot;))
+
+attach(data_pred)
+b1p = (mag-mh)*(mag&lt;=mh)
+b2p = (mag-mh)*(mag&gt;mh)
+c1p = (mag-mref)*log10(sqrt(JB_complete^2+h^2))
+c2p = log10(sqrt(JB_complete^2+h^2))
+c3p = sqrt(JB_complete^2+h^2)
+f1p = as.numeric(fm_type_code == &quot;SS&quot;)
+f2p = as.numeric(fm_type_code == &quot;TF&quot;)
+kp = log10(vs30/800)*(vs30&lt;=1500)+log10(1500/800)*(vs30&gt;1500)
+yp = log10(rotD50_pga)
+detach(data_pred)
+
+data_pred_reg &lt;- data.frame(Y = yp,
+                            M1 = b1p,
+                            M2 = b2p,
+                            MlnR = c1p,
+                            lnR = c2p,
+                            R = c3p,
+                            Fss = f1p,
+                            Frv = f2p,
+                            lnVS = kp,
+                            #eq = data_pred$EQID,
+                            eq = NA,
+                            stat = data_pred$STATID,
+                            intercept = 1,
+                            resid = NA
+)
+data_pred_reg$idx_cell &lt;- (n_rec + 1):(n_rec + length(data_pred_reg$Y))
+data_pred_reg$idx &lt;- (n_rec + 1):(n_rec + length(data_pred_reg$Y))
+
+co_eq_pred &lt;- data_pred[,c(13,14)]
+co_stat_pred &lt;- data_pred[,c(15,16)]
+
+co_eq_stat_pred &lt;- cbind(rowMeans(cbind(co_eq_pred$X_ev, co_stat_pred$X_stat)),
+                         rowMeans(cbind(co_eq_pred$Y_ev, co_stat_pred$Y_stat)))
+
+
+###############################################################################
+co_eq_pred_msgwr &lt;- co_eq_pred * 1000
+co_stat_pred_msgwr &lt;- co_stat_pred * 1000
+
+#Build spatial points data frame for UTM33 coordinates:
+utm_ev_pred_sp = SpatialPointsDataFrame(co_eq_pred_msgwr, data_pred[,1:6])
+utm_st_pred_sp = SpatialPointsDataFrame(co_stat_pred_msgwr, data_pred[,1:6])
+
+pcoords = cbind(co_eq_pred_msgwr, co_stat_pred_msgwr)
+
+Xc_pred = cbind(b1p,b2p,f1p,f2p,c1p)
+Xe_pred = cbind(c2p,c3p)
+Xs_pred = kp
+
+#load(file = file.path(&#39;RESULTS&#39;, &#39;results_caramenti.Rdata&#39;))
+prediction = emgwr_prediction_points_no_param2(Xc, Xe, Xs, y, sec, &quot;sec&quot;, bwe, bws,
+                                               coordinates(utm_ev_sp), coordinates(utm_st_sp), Xc_pred, Xe_pred, Xs_pred,
+                                               pcoords, 0.05)
+save(prediction,
+     file = file.path(&#39;RESULTS&#39;, &#39;results_pred_mswgr_line.Rdata&#39;))</code></pre>
+<p>Calculate predictions for three events, with four directions (East, West, South, North) each.</p>
+<pre class="r"><code>data_pred &lt;- read.csv(file.path(&quot;DATA&quot;, &quot;data_prediction.csv&quot;))
+
+attach(data_pred)
+b1p = (mag-mh)*(mag&lt;=mh)
+b2p = (mag-mh)*(mag&gt;mh)
+c1p = (mag-mref)*log10(sqrt(JB_complete^2+h^2))
+c2p = log10(sqrt(JB_complete^2+h^2))
+c3p = sqrt(JB_complete^2+h^2)
+f1p = as.numeric(fm_type_code == &quot;SS&quot;)
+f2p = as.numeric(fm_type_code == &quot;TF&quot;)
+kp = log10(vs30/800)*(vs30&lt;=1500)+log10(1500/800)*(vs30&gt;1500)
+yp = log10(rotD50_pga)
+detach(data_pred)
+
+data_pred_reg &lt;- data.frame(Y = yp,
+                            M1 = b1p,
+                            M2 = b2p,
+                            MlnR = c1p,
+                            lnR = c2p,
+                            R = c3p,
+                            Fss = f1p,
+                            Frv = f2p,
+                            lnVS = kp,
+                            #eq = data_pred$EQID,
+                            eq = NA,
+                            stat = data_pred$STATID,
+                            intercept = 1,
+                            resid = NA
+)
+data_pred_reg$idx_cell &lt;- (n_rec + 1):(n_rec + length(data_pred_reg$Y))
+data_pred_reg$idx &lt;- (n_rec + 1):(n_rec + length(data_pred_reg$Y))
+
+co_eq_pred &lt;- data_pred[,c(13,14)]
+co_stat_pred &lt;- data_pred[,c(15,16)]
+
+co_eq_stat_pred &lt;- cbind(rowMeans(cbind(co_eq_pred$X_ev, co_stat_pred$X_stat)),
+                         rowMeans(cbind(co_eq_pred$Y_ev, co_stat_pred$Y_stat)))
+
+
+###############################################################################
+co_eq_pred_msgwr &lt;- co_eq_pred * 1000
+co_stat_pred_msgwr &lt;- co_stat_pred * 1000
+
+#Build spatial points data frame for UTM33 coordinates:
+utm_ev_pred_sp = SpatialPointsDataFrame(co_eq_pred_msgwr, data_pred[,1:6])
+utm_st_pred_sp = SpatialPointsDataFrame(co_stat_pred_msgwr, data_pred[,1:6])
+
+pcoords = cbind(co_eq_pred_msgwr, co_stat_pred_msgwr)
+
+Xc_pred = cbind(b1p,b2p,f1p,f2p,c1p)
+Xe_pred = cbind(c2p,c3p)
+Xs_pred = kp
+
+#load(file = file.path(&#39;RESULTS&#39;, &#39;results_caramenti.Rdata&#39;))
+prediction = emgwr_prediction_points_no_param2(Xc, Xe, Xs, y, sec, &quot;sec&quot;, bwe, bws,
+                                               coordinates(utm_ev_sp), coordinates(utm_st_sp), Xc_pred, Xe_pred, Xs_pred,
+                                               pcoords, 0.05)
+save(prediction,
+     file = file.path(&#39;RESULTS&#39;, &#39;results_pred_mswgr.Rdata&#39;))</code></pre>
 </div>
 <div id="references" class="section level1 unnumbered">
 <h1>References</h1>

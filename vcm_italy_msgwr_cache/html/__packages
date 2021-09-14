@@ -1,0 +1,16 @@
+base
+Matrix
+lme4
+sf
+sp
+raster
+rgdal
+maptools
+robustbase
+Rcpp
+spData
+spatialreg
+GWmodel
+ggplot2
+tictoc
+psych

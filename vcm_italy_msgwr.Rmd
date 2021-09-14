@@ -6,11 +6,11 @@ date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
   #pdf_document:
-  keep_md: true
-toc: true
-toc_depth: 2
-number_sections: true
-highlight: tango
+    keep_md: true
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    highlight: tango
 link-citations: yes
 linkcolor: blue
 citecolor: blue
@@ -39,6 +39,7 @@ library(sf)
 library(raster)
 library(rgdal)
 library(GWmodel)
+library(psych)
 library(ggplot2)
 library(tictoc)
 
@@ -51,7 +52,6 @@ source(file.path("R_Caramenti", "predict_new.R"))
 # corrected for Vs30 differences between stations of same location
 data <- read.csv(file.path('DATA', 'italian_data_pga_id_utm_stat.csv'))
 print(dim(data))
-data <- data[1:1000,]
 
 # Set linear predictors
 mh = 5.5
@@ -136,7 +136,7 @@ bws = 75000
 coords_df_utm = as.data.frame(coords_utm)
 ```
 
-``` {r ms-gwr, cache = TRUE, echo = FALSE}
+``` {r ms-gwr, cache = TRUE}
 tic()
 sec = SEC_only_calibration(Xc, Xe, Xs, y, "c", bwe, bws, coordinates(utm_ev_sp), coordinates(utm_st_sp))
 toc()
@@ -159,7 +159,149 @@ beta_c3_coord = cbind(coords_utm, beta_c3)
 beta_c3_coord = as.data.frame(beta_c3_coord)
 
 
-save(sec, result, file = file.path('RESULTS', 'results_caramenti_tmp.Rdata'))
+save(sec, result, file = file.path('RESULTS', 'results_caramenti.Rdata'))
+```
+
+Calculate prediction for the data set.
+
+``` {r msgwr-pred, cache = TRUE}
+pcoords = as.data.frame(cbind(coordinates(utm_ev_sp), coordinates(utm_st_sp)))
+tic()
+prediction_msgwr <- emgwr_prediction_points_no_param2(Xc, Xe, Xs, y, sec, "sec", bwe, bws,
+                                                      coordinates(utm_ev_sp), coordinates(utm_st_sp), Xc, Xe, Xs,
+                                                      pcoords, 0.05)
+toc()
+save(prediction_msgwr, file = file.path('RESULTS', 'residuals_caramenti.Rdata'))
+```
+
+Calculate prediction for one event in Middle Italy, with directions to North and South.
+
+``` {r msgwr-pred-line, cache = TRUE}
+data_pred <- read.csv(file.path("DATA", "data_prediction_line.csv"))
+
+attach(data_pred)
+b1p = (mag-mh)*(mag<=mh)
+b2p = (mag-mh)*(mag>mh)
+c1p = (mag-mref)*log10(sqrt(JB_complete^2+h^2))
+c2p = log10(sqrt(JB_complete^2+h^2))
+c3p = sqrt(JB_complete^2+h^2)
+f1p = as.numeric(fm_type_code == "SS")
+f2p = as.numeric(fm_type_code == "TF")
+kp = log10(vs30/800)*(vs30<=1500)+log10(1500/800)*(vs30>1500)
+yp = log10(rotD50_pga)
+detach(data_pred)
+
+data_pred_reg <- data.frame(Y = yp,
+                            M1 = b1p,
+                            M2 = b2p,
+                            MlnR = c1p,
+                            lnR = c2p,
+                            R = c3p,
+                            Fss = f1p,
+                            Frv = f2p,
+                            lnVS = kp,
+                            #eq = data_pred$EQID,
+                            eq = NA,
+                            stat = data_pred$STATID,
+                            intercept = 1,
+                            resid = NA
+)
+data_pred_reg$idx_cell <- (n_rec + 1):(n_rec + length(data_pred_reg$Y))
+data_pred_reg$idx <- (n_rec + 1):(n_rec + length(data_pred_reg$Y))
+
+co_eq_pred <- data_pred[,c(13,14)]
+co_stat_pred <- data_pred[,c(15,16)]
+
+co_eq_stat_pred <- cbind(rowMeans(cbind(co_eq_pred$X_ev, co_stat_pred$X_stat)),
+                         rowMeans(cbind(co_eq_pred$Y_ev, co_stat_pred$Y_stat)))
+
+
+###############################################################################
+co_eq_pred_msgwr <- co_eq_pred * 1000
+co_stat_pred_msgwr <- co_stat_pred * 1000
+
+#Build spatial points data frame for UTM33 coordinates:
+utm_ev_pred_sp = SpatialPointsDataFrame(co_eq_pred_msgwr, data_pred[,1:6])
+utm_st_pred_sp = SpatialPointsDataFrame(co_stat_pred_msgwr, data_pred[,1:6])
+
+pcoords = cbind(co_eq_pred_msgwr, co_stat_pred_msgwr)
+
+Xc_pred = cbind(b1p,b2p,f1p,f2p,c1p)
+Xe_pred = cbind(c2p,c3p)
+Xs_pred = kp
+
+#load(file = file.path('RESULTS', 'results_caramenti.Rdata'))
+prediction = emgwr_prediction_points_no_param2(Xc, Xe, Xs, y, sec, "sec", bwe, bws,
+                                               coordinates(utm_ev_sp), coordinates(utm_st_sp), Xc_pred, Xe_pred, Xs_pred,
+                                               pcoords, 0.05)
+save(prediction,
+     file = file.path('RESULTS', 'results_pred_mswgr_line.Rdata'))
+
+```
+
+Calculate predictions for three events, with four directions (East, West, South, North) each.
+
+``` {r msgwr-pred-three_events, cache = TRUE}
+data_pred <- read.csv(file.path("DATA", "data_prediction.csv"))
+
+attach(data_pred)
+b1p = (mag-mh)*(mag<=mh)
+b2p = (mag-mh)*(mag>mh)
+c1p = (mag-mref)*log10(sqrt(JB_complete^2+h^2))
+c2p = log10(sqrt(JB_complete^2+h^2))
+c3p = sqrt(JB_complete^2+h^2)
+f1p = as.numeric(fm_type_code == "SS")
+f2p = as.numeric(fm_type_code == "TF")
+kp = log10(vs30/800)*(vs30<=1500)+log10(1500/800)*(vs30>1500)
+yp = log10(rotD50_pga)
+detach(data_pred)
+
+data_pred_reg <- data.frame(Y = yp,
+                            M1 = b1p,
+                            M2 = b2p,
+                            MlnR = c1p,
+                            lnR = c2p,
+                            R = c3p,
+                            Fss = f1p,
+                            Frv = f2p,
+                            lnVS = kp,
+                            #eq = data_pred$EQID,
+                            eq = NA,
+                            stat = data_pred$STATID,
+                            intercept = 1,
+                            resid = NA
+)
+data_pred_reg$idx_cell <- (n_rec + 1):(n_rec + length(data_pred_reg$Y))
+data_pred_reg$idx <- (n_rec + 1):(n_rec + length(data_pred_reg$Y))
+
+co_eq_pred <- data_pred[,c(13,14)]
+co_stat_pred <- data_pred[,c(15,16)]
+
+co_eq_stat_pred <- cbind(rowMeans(cbind(co_eq_pred$X_ev, co_stat_pred$X_stat)),
+                         rowMeans(cbind(co_eq_pred$Y_ev, co_stat_pred$Y_stat)))
+
+
+###############################################################################
+co_eq_pred_msgwr <- co_eq_pred * 1000
+co_stat_pred_msgwr <- co_stat_pred * 1000
+
+#Build spatial points data frame for UTM33 coordinates:
+utm_ev_pred_sp = SpatialPointsDataFrame(co_eq_pred_msgwr, data_pred[,1:6])
+utm_st_pred_sp = SpatialPointsDataFrame(co_stat_pred_msgwr, data_pred[,1:6])
+
+pcoords = cbind(co_eq_pred_msgwr, co_stat_pred_msgwr)
+
+Xc_pred = cbind(b1p,b2p,f1p,f2p,c1p)
+Xe_pred = cbind(c2p,c3p)
+Xs_pred = kp
+
+#load(file = file.path('RESULTS', 'results_caramenti.Rdata'))
+prediction = emgwr_prediction_points_no_param2(Xc, Xe, Xs, y, sec, "sec", bwe, bws,
+                                               coordinates(utm_ev_sp), coordinates(utm_st_sp), Xc_pred, Xe_pred, Xs_pred,
+                                               pcoords, 0.05)
+save(prediction,
+     file = file.path('RESULTS', 'results_pred_mswgr.Rdata'))
+
 ```
 
 # References
