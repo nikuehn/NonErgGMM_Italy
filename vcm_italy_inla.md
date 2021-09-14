@@ -2,7 +2,7 @@
 title: "A Reevaluation of the Italian PGA Data in a Varying Coefficient Ground-Motion Model with INLA"
 author:
   - Nicolas Kuehn^[Unversity of California, Los Angeles, kuehn@ucla.edu]
-date: "10 September, 2021"
+date: "14 September, 2021"
 output:
   html_document:
   #pdf_document:
@@ -148,14 +148,13 @@ In total, there are 4784 records from 137 events and 927 stations.
 
 
 ```r
-dir_esupp <- '/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/Caramenti_esupp/'
-dataset = readRDS(file.path(dir_esupp,"italian_data_pga.RData"))
-shape_utm = st_read(file.path(dir_esupp,'confini_ut33.shp'))
+dataset = readRDS(file.path("DATA","italian_data_pga.RData"))
+shape_utm = st_read(file.path("DATA",'confini_ut33.shp'))
 ```
 
 ```
 ## Reading layer `confini_ut33' from data source 
-##   `/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/Caramenti_esupp/confini_ut33.shp' 
+##   `/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/Git/NonErgGMM_Italy/DATA/confini_ut33.shp' 
 ##   using driver `ESRI Shapefile'
 ## Simple feature collection with 1 feature and 2 fields
 ## Geometry type: MULTIPOLYGON
@@ -216,9 +215,9 @@ coords_df_utm = as.data.frame(coords_utm)
 
 # read n data file with event and station ids
 # correcte for Vs30 differences between stations of same location
-data <- read.csv(file.path(dir_esupp,'italian_data_pga_id_utm_stat.csv'))
+data <- read.csv(file.path('DATA', 'italian_data_pga_id_utm_stat.csv'))
 #### Cell-specific distances are computed outside of R
-data_dm <- rstan::read_rdump('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/DATA/dm_25x25.Rdata')
+data_dm <- rstan::read_rdump(file.path('DATA', 'dm_25x25.Rdata'))
 
 # Set linear predictors
 mh = 5.5
@@ -274,10 +273,10 @@ ggplot() +
 
 ggplot() + 
   geom_sf(data = shape_utm_no_lamp, size = 1.6, color = "black", fill = NA )+
-  geom_point(data = utm_st, aes(x=longitude_st, y=latitude_st), fill= 'firebrick3',
+  geom_point(data = utm_st, aes(x=longitude_st, y=latitude_st), fill= 'deeppink3',
              size = 2, shape = 24, stroke = 0.7)+
-  geom_point(data = utm_ev, aes(x=longitude_ev, y=latitude_ev), fill= 'cadetblue2',
-             size = 2, shape = 21, stroke = 1.5)+
+  geom_point(data = utm_ev, aes(x=longitude_ev, y=latitude_ev), fill= 'azure2',
+             size = 2, shape = 21, stroke = 1.0)+
   theme(
     axis.title = element_text(size = 20),
     axis.text = element_text(size = 14),
@@ -747,6 +746,22 @@ fit_inla_spatial_vs <- inla(form_spatial_vs,
 
 
 ```r
+# set starting values based on previous estimated models
+theta <- c(fit_inla_spatial$mode$theta["Log precision for the Gaussian observations"],
+           fit_inla_spatial$mode$theta["Log precision for eq"],
+           fit_inla_spatial$mode$theta["Log precision for stat"],
+           fit_inla_spatial$mode$theta["log(Range) for idx.stat"],
+           fit_inla_spatial$mode$theta["log(Stdev) for idx.stat"],
+           fit_inla_spatial$mode$theta["log(Range) for idx.eq"],
+           fit_inla_spatial$mode$theta["log(Stdev) for idx.eq"],
+           fit_inla_spatial_gs$mode$theta["log(Range) for idx.lnr"],
+           fit_inla_spatial_gs$mode$theta["log(Stdev) for idx.lnr"],
+           fit_inla_spatial$mode$theta["log(Range) for idx.r"],
+           fit_inla_spatial$mode$theta["log(Stdev) for idx.r"],
+           fit_inla_spatial_vs$mode$theta["log(Range) for idx.vs"],
+           fit_inla_spatial_vs$mode$theta["log(Stdev) for idx.vs"]
+           )
+
 form_spatial_full <- y ~ 0 + intercept + M1 + M2 + lnR + MlnR + R + Fss + Frv + lnVS +
   f(eq, model = "iid", hyper = prior_prec_tau_lg) + 
   f(stat, model = "iid",hyper = prior_prec_phiS2S_lg) +
@@ -761,7 +776,8 @@ fit_inla_spatial_full <- inla(form_spatial_full,
                          family="gaussian",
                          control.fixed = prior.fixed,
                          control.family = list(hyper = list(prec = prior_prec_phiSS_lg)),
-                         control.inla = list(int.strategy = "eb", strategy = "gaussian")
+                         control.inla = list(int.strategy = "eb", strategy = "gaussian"),
+                         control.mode=list(theta = theta, restart=TRUE)
 )
 ```
 
@@ -834,11 +850,6 @@ fit_inla_spatial_cell_int <- inla(form_spatial_cell,
                           control.fixed = prior.fixed,
                           control.family = list(hyper = list(prec = prior_prec_phiSS_lg))
 )
-```
-
-```
-## Warning in inla.model.properties.generic(inla.trim.family(model), mm[names(mm) == : Model 'z' in section 'latent' is marked as 'experimental'; changes may appear at any time.
-##   Use this model with extra care!!! Further warnings are disabled.
 ```
 
 ## Spatial Model with all spatially varying terms and cell-specific attenuation
@@ -940,7 +951,7 @@ result = SEC_grid_creation(Xc, Xe, Xs, y,"c", bwe, bws, coordinates(utm_ev_sp),
 
 
 ```r
-load(file = file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/','RESULTS', 'results_caramenti.Rdata'))
+load(file = file.path('RESULTS', 'results_caramenti.Rdata'))
 beta_const = result$beta_c
 
 beta_k = t(result$beta_s)
@@ -960,8 +971,7 @@ time_msgwr <- 14189.787
 
 
 ```r
-load(file = file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/',
-                      'RESULTS', 'residuals_caramenti.Rdata'))
+load(file = file.path('RESULTS', 'residuals_caramenti.Rdata'))
 data_reg$resid <- data_reg$Y - prediction_msgwr$y0
 
 fit_inla_resid <- inla(resid ~ 1 +
@@ -1041,23 +1051,23 @@ Table: Information Criteria (WAIC and DIC) for different INLA models
 
 |                                               |     WAIC|      DIC| Running Time|
 |:----------------------------------------------|--------:|--------:|------------:|
-|eq/stat terms                                  |  -777.41|  -798.16|        53.17|
-|eq terms                                       |  2398.99|  2392.42|        42.54|
-|no random effects                              |  3407.34|  3407.69|        10.96|
-|spatial eq/stat constants                      | -1527.99| -1511.66|       805.22|
-|spatial eq constant                            | -1502.30| -1473.62|       157.87|
-|spatial stat constants                         | -1514.00| -1497.32|       184.21|
-|spatial eq/stat constants + gs                 | -1759.17| -1736.45|       800.53|
-|spatial eq/stat constants + r (midpoint)       | -1627.22| -1594.29|       472.81|
-|spatial eq/stat constants + r (eq coord)       | -1382.87| -1427.63|       401.44|
-|spatial eq/stat constants + vs                 | -1530.64| -1512.75|      1531.59|
-|full spatial model                             | -1780.31| -1742.16|      2131.77|
-|spatial model, no random effects/constants     |  -187.23|   -83.95|       505.28|
-|spatial eq/stat constants + cells              | -1841.46| -1788.00|       489.38|
-|spatial eq/stat constants + cells, integration | -1835.83| -1784.71|      2048.90|
-|spatial eq/stat constants + gs + vs + cells    | -1964.89| -1914.46|      2152.52|
-|spatial eq/stat constants + gs + cells         | -1955.72| -1904.12|       378.04|
-|spatial eq/stat constants + vs + cells         | -1849.08| -1801.96|       951.04|
+|eq/stat terms                                  |  -777.41|  -798.16|        22.05|
+|eq terms                                       |  2398.99|  2392.42|        34.10|
+|no random effects                              |  3407.34|  3407.69|        12.51|
+|spatial eq/stat constants                      | -1521.88| -1496.97|       477.44|
+|spatial eq constant                            | -1502.30| -1473.62|       119.81|
+|spatial stat constants                         | -1513.89| -1497.12|       117.17|
+|spatial eq/stat constants + gs                 | -1759.80| -1745.41|       582.39|
+|spatial eq/stat constants + r (midpoint)       | -1627.29| -1594.47|       409.91|
+|spatial eq/stat constants + r (eq coord)       | -1382.83| -1427.39|       269.69|
+|spatial eq/stat constants + vs                 | -1530.64| -1514.67|      1110.15|
+|full spatial model                             | -1758.34| -1725.85|      1926.42|
+|spatial model, no random effects/constants     |  -187.91|   -85.08|      1199.44|
+|spatial eq/stat constants + cells              | -1841.30| -1787.50|       907.45|
+|spatial eq/stat constants + cells, integration | -1838.58| -1791.33|      1596.59|
+|spatial eq/stat constants + gs + vs + cells    | -1953.83| -1900.03|       617.32|
+|spatial eq/stat constants + gs + cells         | -1956.41| -1901.44|       484.67|
+|spatial eq/stat constants + vs + cells         | -1849.28| -1806.79|      2091.22|
 |MS-GWR                                         |       NA|       NA|     14189.79|
 
 All spatial models are an improvement over the simple ergodic model that only includes event and station terms.
@@ -1311,7 +1321,7 @@ ggplot() +
 <p class="caption">Posterior distribution of spatial range of geometrical spreading terms for different models.</p>
 </div>
 
-## Compason of Fixed Effects
+## Comparison of Fixed Effects
 
 
 ```r
@@ -1435,11 +1445,11 @@ Table: Estimated standard deviations (mean of posterior distribution).
 |:----------------------------------------------|---------:|---------:|---------:|
 |eq/stat terms                                  | 0.2042613| 0.1449961| 0.2331139|
 |no random effects                              | 0.3450781|        NA|        NA|
-|spatial eq/stat constants                      | 0.1821196| 0.0829741| 0.1590015|
-|full spatial model                             | 0.1770333| 0.0831417| 0.1545714|
-|spatial model, no random effects/constants     | 0.2194835|        NA|        NA|
-|spatial eq/stat constants + cells              | 0.1751112| 0.0862417| 0.1573863|
-|spatial eq/stat constants + cells, integration | 0.1749622| 0.0873041| 0.1570731|
+|spatial eq/stat constants                      | 0.1823025| 0.0848408| 0.1587514|
+|full spatial model                             | 0.1773721| 0.0834966| 0.1581042|
+|spatial model, no random effects/constants     | 0.2194172|        NA|        NA|
+|spatial eq/stat constants + cells              | 0.1751167| 0.0862315| 0.1573930|
+|spatial eq/stat constants + cells, integration | 0.1752461| 0.0918765| 0.1579738|
 |MS-GWR residuals                               | 0.2003396| 0.0916589| 0.2066721|
 |ITA18                                          | 0.2205820| 0.1559880| 0.2000990|
 
@@ -1463,7 +1473,7 @@ This part is only done for the INLA models.
 library(matrixStats) # for logsumexp
 
 # load cv results of MS-GWR
-load(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY', 'RESULTS', 'results_cveq_fold_b_ll_mswgr.Rdata'))
+load(file.path('RESULTS', 'results_cveq_fold_b_ll_mswgr.Rdata'))
 tmp <- resid_mod
 tmp2 <- cv_results
 tmp3 <- loglik_mod
@@ -1899,87 +1909,87 @@ for(b in 1:n_fold) {
 ## [1] "working on model 1"
 ## [1] "mean = 0.00456364312555309 sd = 0.246874031197999"
 ## [1] "working on model 2"
-## [1] "mean = -0.020944816580942 sd = 0.322897634952355"
+## [1] "mean = -0.0209448053657166 sd = 0.322897635397506"
 ## [1] "working on model 3"
 ## [1] "mean = 0.0120734080940625 sd = 0.325950242557458"
 ## [1] "working on model 4"
-## [1] "mean = -0.00576785088628497 sd = 0.290883912877798"
+## [1] "mean = -0.00564826737881487 sd = 0.291089948941428"
 ## [1] "working on model 5"
-## [1] "mean = 0.0105704062171967 sd = 0.240168217470607"
+## [1] "mean = 0.0103075446083969 sd = 0.239731810314872"
 ## [1] "working on model 6"
-## [1] "mean = 0.0270167645024283 sd = 0.244133208817596"
+## [1] "mean = 0.0248020147124058 sd = 0.245737776460391"
 ## [1] "working on model 7"
-## [1] "mean = 0.0254735889877114 sd = 0.24568415697194"
+## [1] "mean = 0.0255714979757602 sd = 0.245527877721971"
 ## [1] "working on model 8"
-## [1] "mean = 0.00955557725266701 sd = 0.239121190719968"
+## [1] "mean = 0.00957222742249976 sd = 0.239130854428604"
 ## [1] "fold 2"
 ## [1] "working on model 1"
 ## [1] "mean = 0.00404755503513967 sd = 0.280325067852517"
 ## [1] "working on model 2"
-## [1] "mean = -0.0117057507940665 sd = 0.358996694938169"
+## [1] "mean = -0.0117057889599775 sd = 0.358996695995166"
 ## [1] "working on model 3"
-## [1] "mean = 0.00209357611810311 sd = 0.359328553663907"
+## [1] "mean = 0.002093576117574 sd = 0.359328553662707"
 ## [1] "working on model 4"
-## [1] "mean = 0.0444849274594708 sd = 0.278249026951578"
+## [1] "mean = 0.045215048650451 sd = 0.278221903339401"
 ## [1] "working on model 5"
-## [1] "mean = 0.0155597344999331 sd = 0.27111527631352"
+## [1] "mean = 0.0147881594672282 sd = 0.27136577467174"
 ## [1] "working on model 6"
-## [1] "mean = 0.0373896509679996 sd = 0.26470761088567"
+## [1] "mean = 0.0357135590610041 sd = 0.264435684208377"
 ## [1] "working on model 7"
-## [1] "mean = 0.0337482959798949 sd = 0.263891483852901"
+## [1] "mean = 0.0354817936697438 sd = 0.264415621449941"
 ## [1] "working on model 8"
-## [1] "mean = 0.0125158229191847 sd = 0.265052788042987"
+## [1] "mean = 0.0125288551355134 sd = 0.265045458499461"
 ## [1] "fold 3"
 ## [1] "working on model 1"
 ## [1] "mean = 0.0381252043879595 sd = 0.28736787487984"
 ## [1] "working on model 2"
-## [1] "mean = 0.0599004736792779 sd = 0.364538069524996"
+## [1] "mean = 0.0599004654402984 sd = 0.364538070422647"
 ## [1] "working on model 3"
-## [1] "mean = 0.0898962404088453 sd = 0.367356927845064"
+## [1] "mean = 0.0898962407617036 sd = 0.367356928092352"
 ## [1] "working on model 4"
-## [1] "mean = -0.04829865021598 sd = 0.340966218331341"
+## [1] "mean = -0.0495123297554841 sd = 0.342265866162666"
 ## [1] "working on model 5"
-## [1] "mean = 0.0385085278731682 sd = 0.270522254554355"
+## [1] "mean = 0.0390270448433387 sd = 0.270281963529062"
 ## [1] "working on model 6"
-## [1] "mean = 0.0362427153629523 sd = 0.260967891746895"
+## [1] "mean = 0.0311892157756944 sd = 0.262449980084128"
 ## [1] "working on model 7"
-## [1] "mean = 0.0303657781372568 sd = 0.262978485034134"
+## [1] "mean = 0.0316943429053305 sd = 0.262837325080368"
 ## [1] "working on model 8"
-## [1] "mean = 0.0412424605700754 sd = 0.262546668885539"
+## [1] "mean = 0.0437635348978191 sd = 0.262095418824066"
 ## [1] "fold 4"
 ## [1] "working on model 1"
 ## [1] "mean = -0.0413461516430655 sd = 0.245148863948091"
 ## [1] "working on model 2"
-## [1] "mean = -0.0795669678083998 sd = 0.322666503334188"
+## [1] "mean = -0.0795669606053928 sd = 0.322666503070977"
 ## [1] "working on model 3"
-## [1] "mean = -0.0640222761949934 sd = 0.324012333043252"
+## [1] "mean = -0.0640222756850469 sd = 0.324012332837434"
 ## [1] "working on model 4"
-## [1] "mean = 0.0402718561206015 sd = 0.321990631952038"
+## [1] "mean = 0.0397881008286041 sd = 0.321884585477414"
 ## [1] "working on model 5"
-## [1] "mean = -0.00764105879713926 sd = 0.245321295376291"
+## [1] "mean = -0.00809681641288462 sd = 0.245474558210724"
 ## [1] "working on model 6"
-## [1] "mean = 0.00854846079373443 sd = 0.26861900142539"
+## [1] "mean = 0.0123006289707938 sd = 0.267784216731641"
 ## [1] "working on model 7"
-## [1] "mean = 0.00859157328779772 sd = 0.268194869748081"
+## [1] "mean = 0.0119597005996983 sd = 0.268083970735819"
 ## [1] "working on model 8"
-## [1] "mean = 0.00548000013469638 sd = 0.244772094682707"
+## [1] "mean = 0.00548221357835055 sd = 0.244778108446509"
 ## [1] "fold 5"
 ## [1] "working on model 1"
 ## [1] "mean = -0.0775772475564917 sd = 0.28792767502906"
 ## [1] "working on model 2"
-## [1] "mean = -0.0874268291506236 sd = 0.366153595890512"
+## [1] "mean = -0.0874268122645042 sd = 0.36615359727054"
 ## [1] "working on model 3"
-## [1] "mean = -0.0759052356549884 sd = 0.366376078721184"
+## [1] "mean = -0.0759052340003993 sd = 0.366376079206747"
 ## [1] "working on model 4"
-## [1] "mean = -0.0261302059107283 sd = 0.268980920484973"
+## [1] "mean = -0.0244052774491159 sd = 0.269923606263465"
 ## [1] "working on model 5"
-## [1] "mean = -0.0462927673222794 sd = 0.253871830836452"
+## [1] "mean = -0.0475989517007645 sd = 0.25433084400649"
 ## [1] "working on model 6"
-## [1] "mean = -0.0433563120966332 sd = 0.24299059021757"
+## [1] "mean = -0.043684722649354 sd = 0.244018315341879"
 ## [1] "working on model 7"
-## [1] "mean = -0.0426394338411577 sd = 0.243832712348802"
+## [1] "mean = -0.0429766179498643 sd = 0.243857885329127"
 ## [1] "working on model 8"
-## [1] "mean = -0.0475885460833465 sd = 0.251452781712103"
+## [1] "mean = -0.0475757573761072 sd = 0.251461771724918"
 ```
 
 
@@ -2004,11 +2014,11 @@ Table: Root mean square error (RMSE) for individual folds from cross-validation.
 |eq/stat random effects         | 0.2468171| 0.2801823| 0.2897683| 0.2484781| 0.2979645|
 |eq random effects              | 0.3234469| 0.3589673| 0.3692783| 0.3321597| 0.3761505|
 |no random effects              | 0.3260430| 0.3591141| 0.3780491| 0.3301020| 0.3738583|
-|spatial without random effects | 0.2908244| 0.2816140| 0.3442307| 0.3243235| 0.2700247|
-|spatial eq/stat constants      | 0.2403044| 0.2713953| 0.2731388| 0.2453054| 0.2578505|
-|full spatial model + cells     | 0.2455262| 0.2671743| 0.2633659| 0.2686073| 0.2466295|
-|eq/stat constants + gs + cells | 0.2469031| 0.2658801| 0.2646180| 0.2681850| 0.2473333|
-|eq/stat constants + cells      | 0.2392161| 0.2651856| 0.2656592| 0.2446988| 0.2557110|
+|spatial without random effects | 0.2910279| 0.2817035| 0.3456888| 0.3241586| 0.2708013|
+|spatial eq/stat constants      | 0.2398572| 0.2716021| 0.2729747| 0.2454731| 0.2585390|
+|full spatial model + cells     | 0.2468881| 0.2666756| 0.2641892| 0.2679194| 0.2476982|
+|eq/stat constants + gs + cells | 0.2467579| 0.2666248| 0.2646337| 0.2682033| 0.2474164|
+|eq/stat constants + cells      | 0.2392265| 0.2651789| 0.2656174| 0.2447048| 0.2557175|
 |MS-GWR                         | 0.3027971| 0.3388769| 0.3423976| 0.3019265| 0.3428962|
 |MS-GWR stat                    | 0.2530393| 0.2695278| 0.2763125| 0.2449033| 0.2972949|
 
@@ -2021,18 +2031,18 @@ knitr::kable(lpd_results, col.names = c("fold 1", "fold 2", "fold 3", "fold 4", 
 
 Table: Log-likelihood for individual folds from cross-validation.
 
-|                               |     fold 1|     fold 2|    fold 3|      fold 4|      fold 5|
-|:------------------------------|----------:|----------:|---------:|-----------:|-----------:|
-|eq/stat random effects         |  -40.00602| -110.74418| -220.4781|  -26.509153| -122.775796|
-|eq random effects              | -377.10096| -324.55453| -516.2534| -296.297332| -267.638763|
-|no random effects              | -379.79510| -323.37943| -557.8988| -285.619707| -267.245925|
-|spatial without random effects | -203.20551| -167.62366| -477.3080| -297.398313|  -84.165858|
-|spatial eq/stat constants      |   27.99359|  -81.27059| -149.5843|    6.708486|  -38.380161|
-|full spatial model + cells     |   10.60474|  -94.39371| -197.5892|  -61.539127|   -6.687196|
-|eq/stat constants + gs + cells |    4.14287|  -87.32077| -202.3223|  -58.540895|   -7.669160|
-|eq/stat constants + cells      |   42.36296|  -60.58785| -142.5026|   17.413093|  -34.209705|
-|MS-GWR                         |         NA|         NA|        NA|          NA|          NA|
-|MS-GWR stat                    |         NA|         NA|        NA|          NA|          NA|
+|                               |       fold 1|     fold 2|    fold 3|      fold 4|      fold 5|
+|:------------------------------|------------:|----------:|---------:|-----------:|-----------:|
+|eq/stat random effects         |  -48.7523291| -108.10820| -230.0046|  -24.877659| -128.015489|
+|eq random effects              | -376.0340575| -322.92402| -519.4316| -299.957234| -270.541324|
+|no random effects              | -379.4065022| -323.47998| -557.8507| -285.551930| -267.197242|
+|spatial without random effects | -202.7258044| -169.76153| -478.9851| -301.401510|  -83.973701|
+|spatial eq/stat constants      |   30.3454353|  -84.25548| -154.0877|    8.102798|  -40.652181|
+|full spatial model + cells     |    0.4330756|  -86.77924| -209.6863|  -61.802746|   -7.357769|
+|eq/stat constants + gs + cells |    0.5815905|  -89.48688| -193.9346|  -67.217376|   -8.455137|
+|eq/stat constants + cells      |   41.5102253|  -56.64614| -134.7271|   16.954818|  -33.549343|
+|MS-GWR                         |           NA|         NA|        NA|          NA|          NA|
+|MS-GWR stat                    |           NA|         NA|        NA|          NA|          NA|
 
 ```r
 res <- t(rbind(sqrt(colMeans(resid_mod[,]^2)),
@@ -2048,14 +2058,14 @@ Table: RMSE and total loglikelihood on test set from cross-validation.
 
 |                               |      RMSE|         LL|
 |:------------------------------|---------:|----------:|
-|eq/stat random effects         | 0.2709532|  -520.5132|
-|eq random effects              | 0.3500225| -1781.8450|
-|no random effects              | 0.3523609| -1813.9390|
-|spatial without random effects | 0.3077671| -1229.7014|
-|spatial eq/stat constants      | 0.2574662|  -234.5330|
-|full spatial model + cells     | 0.2584512|  -349.6045|
-|eq/stat constants + gs + cells | 0.2588904|  -351.7103|
-|eq/stat constants + cells      | 0.2537116|  -177.5241|
+|eq/stat random effects         | 0.2709532|  -539.7582|
+|eq random effects              | 0.3500225| -1788.8882|
+|no random effects              | 0.3523609| -1813.4864|
+|spatial without random effects | 0.3082976| -1236.8477|
+|spatial eq/stat constants      | 0.2574679|  -240.5471|
+|full spatial model + cells     | 0.2589068|  -365.1930|
+|eq/stat constants + gs + cells | 0.2590025|  -358.5124|
+|eq/stat constants + cells      | 0.2537038|  -166.4575|
 |MS-GWR                         | 0.3244398| -1420.5269|
 |MS-GWR stat                    | 0.2662948|         NA|
 
@@ -2077,7 +2087,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_cell$summary.random$idx.e
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_c <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.2,0.2), breaks = c(-0.2, -0.1,0, 0.1, 0.2)
   ) +
   labs(title = "Spatial event term - mean",
@@ -2094,7 +2104,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_cell$summary.random$idx.e
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_sd_c <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(0,0.25), breaks = c(0, 0.1, 0.2)
   ) +
   labs(title = "Spatial event term - sd",
@@ -2111,7 +2121,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.e
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.2,0.2), breaks = c(-0.2, -0.1,0, 0.1, 0.2)
   ) +
   labs(title = "Spatial event term - mean",
@@ -2128,7 +2138,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.e
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_sd_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(0,0.25), breaks = c(0, 0.1, 0.2)
   ) +
   labs(title = "Spatial event term - sd",
@@ -2154,7 +2164,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.s
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.5,0.5), breaks = c(-0.5, -0.25,0, 0.25, 0.5)
   ) +
   labs(title = "Spatial station term - mean",
@@ -2171,7 +2181,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.s
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(0,0.25), breaks = c(0, 0.1, 0.2)
   ) +
   labs(title = "Spatial station term - sd",
@@ -2195,7 +2205,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.l
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.2,0.2), breaks = c(-0.2, -0.1,0, 0.1, 0.2)
   ) +
   labs(title = "Spatial GS term - mean",
@@ -2212,7 +2222,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.l
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_sd_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(0,0.2), breaks = c(0, 0.1, 0.2)
   ) +
   labs(title = "Spatial GS term - sd",
@@ -2230,7 +2240,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_b$summary.random$idx
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_fb <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.2,0.2), breaks = c(-0.2, -0.1,0, 0.1, 0.2)
   ) +
   labs(title = "Spatial delta GS term - mean",
@@ -2247,7 +2257,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_b$summary.random$idx
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_sd_fb <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(0,0.2), breaks = c(0, 0.1, 0.2)
   ) +
   labs(title = "Spatial delta GS term - sd",
@@ -2272,7 +2282,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.l
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                       ,limits = c(-1.8,-1.), breaks = c(-1.8, -1.4, -1)
   ) +
   labs(title = "Spatial GS term - mean",
@@ -2292,7 +2302,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_b$summary.random$idx
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_fb <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-1.8,-1.), breaks = c(-1.8, -1.4, -1)
   ) +
   labs(title = "Spatial GS term - mean",
@@ -2311,7 +2321,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_cell$summary.random$
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_fc <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-1.8,-1.), breaks = c(-1.8, -1.4, -1)
   ) +
   labs(title = "Spatial GS term - mean",
@@ -2328,7 +2338,7 @@ p_mean_fc <- ggplot() +
 df_plot <- as.data.frame(cbind(co_df_utm, beta_c2))
 p_mean_wgr <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=beta_c2))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-1.8,-1.), breaks = c(-1.8, -1.4, -1)
   ) +
   labs(title = "Spatial GS term",
@@ -2355,7 +2365,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.r
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.004,0.004), breaks = c(-0.004, -0.002,0, 0.002, 0.004)
   ) +
   labs(title = "Spatial delta linear R term - mean",
@@ -2372,7 +2382,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.r
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_sd_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(0,0.003), breaks = c(0, 0.0015, 0.003)
   ) +
   labs(title = "Spatial delta linear R term - sd",
@@ -2390,7 +2400,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_b$summary.random$idx
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_fb <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.004,0.004), breaks = c(-0.004, -0.002,0, 0.002, 0.004)
   ) +
   labs(title = "Spatial delta linear R term - mean",
@@ -2407,7 +2417,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_b$summary.random$idx
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_sd_fb <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(0,0.003), breaks = c(0, 0.0015, 0.003)
   ) +
   labs(title = "Spatial delta linear R term - sd",
@@ -2421,8 +2431,7 @@ p_sd_fb <- ggplot() +
   )
 
 # cell-specific attenuation
-cells <- read.csv(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/',
-                            'DATA', 'cells_dim25.csv'))
+cells <- read.csv(file.path('DATA', 'cells_dim25.csv'))
 cell_idx <- data_dm$cell_idx
 
 cells2 <- cells[cell_idx,]
@@ -2433,7 +2442,7 @@ df_plot <- data.frame(x = cells2$X0, y = cells2$X1,
                       z = ca, z_sd = ca_sd)
 p_mean_c <- ggplot() + 
   geom_raster(df_plot, mapping = aes(x=x, y=y, fill=z))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = "cells"
+  scale_fill_gradient(low = 'red', high = 'yellow', name = "cells"
                        ,limits = c(-0.004,0.004), breaks = c(-0.004, -0.002,0, 0.002, 0.004)
   ) +
   labs(title = "Cell-specific linear R term - mean",
@@ -2448,7 +2457,7 @@ p_mean_c <- ggplot() +
 
 p_sd_c <- ggplot() + 
   geom_raster(df_plot, mapping = aes(x=x, y=y, fill=z_sd))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = "cells"
+  scale_fill_gradient(low = 'red', high = 'yellow', name = "cells"
                        ,limits = c(0,0.003), breaks = c(0, 0.0015, 0.003)
   ) +
   labs(title = "Cell-specific linear R term - sd",
@@ -2473,7 +2482,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.r
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                       ,limits = c(-0.009,0.003), breaks = c(-0.009, -0.004, 0.003)
   ) +
   labs(title = "Spatial linear term - mean",
@@ -2493,7 +2502,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_b$summary.random$idx
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_fb <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.009,0.003), breaks = c(-0.009, -0.004, 0.003)
   ) +
   labs(title = "Spatial linear term - mean",
@@ -2510,7 +2519,7 @@ p_mean_fb <- ggplot() +
 df_plot <- as.data.frame(cbind(co_df_utm, beta_c3))
 p_mean_wgr <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=beta_c3))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.009,0.003), breaks = c(-0.009, -0.004, 0.003)
   ) +
   labs(title = "Spatial linear term",
@@ -2528,7 +2537,7 @@ df_plot <- data.frame(x = cells2$X0, y = cells2$X1,
                       z = ca + fit_inla_spatial_full_cell$summary.fixed$mean[6])
 p_mean_c <- ggplot() + 
   geom_raster(df_plot, mapping = aes(x=x, y=y, fill=z))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = "cells"
+  scale_fill_gradient(low = 'red', high = 'yellow', name = "cells"
                        ,limits = c(-0.009,0.003), breaks = c(-0.009, -0.004, 0.003)
   ) +
   labs(title = "Cell-specific linear R term ",
@@ -2555,7 +2564,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.v
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.6,0.6), breaks = c(-0.6, -0.3,0, 0.3, 0.6)
   ) +
   labs(title = "Spatial delta VS - mean",
@@ -2572,7 +2581,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.v
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_sd_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(0,0.6), breaks = c(0, 0.3, 0.6)
   ) +
   labs(title = "Spatial delta VS term - sd",
@@ -2590,7 +2599,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_b$summary.random$idx
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_fb <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-0.6,0.6), breaks = c(-0.6, -0.3,0, 0.3, 0.6)
   ) +
   labs(title = "Spatial delta VS term - mean",
@@ -2607,7 +2616,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_b$summary.random$idx
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_sd_fb <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(0,0.6), breaks = c(0, 0.3, 0.6)
   ) +
   labs(title = "Spatial delta VS term - sd",
@@ -2632,7 +2641,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.v
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_f <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                       ,limits = c(-1.,0.00), breaks = c(-1., -0.5, 0.)
   ) +
   labs(title = "Spatial VS term - mean",
@@ -2652,7 +2661,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_b$summary.random$idx
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p_mean_fb <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-1.,0.00), breaks = c(-1., -0.5, 0.)
   ) +
   labs(title = "Spatial VS term - mean",
@@ -2669,7 +2678,7 @@ p_mean_fb <- ggplot() +
 df_plot <- as.data.frame(cbind(co_df_utm, beta_k))
 p_mean_wgr <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=beta_k))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = ""
+  scale_fill_gradient(low = 'red', high = 'yellow', name = ""
                        ,limits = c(-1.,0.00), breaks = c(-1., -0.5, 0.)
   ) +
   labs(title = "Spatial VS term",
@@ -2704,7 +2713,7 @@ df_plot <- data.frame(x = cells2$X0, y = cells2$X1,
                       z_diff = ca - ca2)
 p_mean_c <- ggplot() + 
   geom_raster(df_plot, mapping = aes(x=x, y=y, fill=z))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = "cells"
+  scale_fill_gradient(low = 'red', high = 'yellow', name = "cells"
                        ,limits = c(-0.004,0.004), breaks = c(-0.004, -0.002,0, 0.002, 0.004)
   ) +
   labs(title = "Cell-specific linear R term - mean",
@@ -2719,7 +2728,7 @@ p_mean_c <- ggplot() +
 
 p_mean_c2 <- ggplot() + 
   geom_raster(df_plot, mapping = aes(x=x, y=y, fill=z2))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = "cells"
+  scale_fill_gradient(low = 'red', high = 'yellow', name = "cells"
                        ,limits = c(-0.004,0.004), breaks = c(-0.004, -0.002,0, 0.002, 0.004)
   ) +
   labs(title = "Cell-specific linear R term - mean",
@@ -2734,7 +2743,7 @@ p_mean_c2 <- ggplot() +
 
 p_mean_diff <- ggplot() + 
   geom_raster(df_plot, mapping = aes(x=x, y=y, fill=z_diff))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = "cells"
+  scale_fill_gradient(low = 'red', high = 'yellow', name = "cells"
                        ,limits = c(-0.004,0.004), breaks = c(-0.004, -0.002,0, 0.002, 0.004)
   ) +
   labs(title = "Cell-specific linear R term - difference",
@@ -2766,11 +2775,11 @@ This means that $\tau$ is no included in the predictive uncertainty.
 
 
 ```r
-data_pred <- read.csv("/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/DATA/data_prediction.csv")
-data_dm_comb <- rstan::read_rdump('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/DATA/dm_combined_25x25.Rdata')
+data_pred <- read.csv(file.path("DATA", "data_prediction.csv"))
+data_dm_comb <- rstan::read_rdump(file.path('DATA', 'dm_combined_25x25.Rdata'))
 dm_sparse_c <- as(data_dm_comb$RC,"dgCMatrix")
 
-load(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY','RESULTS', 'results_pred_mswgr.Rdata'))
+load(file.path('RESULTS', 'results_pred_mswgr.Rdata'))
 
 attach(data_pred)
 b1p = (mag-mh)*(mag<=mh)
@@ -2956,14 +2965,7 @@ fit_inla_spatial_cell_pred2 <- inla(form_spatial_cell_c,
                           control.family = list(hyper = list(prec = prior_prec_phiSS_lg)),
                           control.inla = list(int.strategy = "eb", strategy = "gaussian")
 )
-```
 
-```
-## Warning in inla.model.properties.generic(inla.trim.family(model), mm[names(mm) == : Model 'z' in section 'latent' is marked as 'experimental'; changes may appear at any time.
-##   Use this model with extra care!!! Further warnings are disabled.
-```
-
-```r
 pred_spatial_cell2 <- fit_inla_spatial_cell_pred2$summary.fitted.values[idx_pred,]
 ```
 
@@ -3247,8 +3249,7 @@ p <- ggplot()+
     legend.position = c(0.1, 0.2),
     legend.title = element_text(size = 20)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_pred_eq1.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_pred_eq1.pdf'), p,
        width = wid, height = asp * wid)
 
 # # EQ 139
@@ -3283,8 +3284,7 @@ p <- ggplot()+
     legend.position = c(0.1, 0.2),
     legend.title = element_text(size = 20)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_pred_eq2.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_pred_eq2.pdf'), p,
        width = wid, height = asp * wid)
 
 # # EQ 140
@@ -3319,16 +3319,15 @@ p <- ggplot()+
     legend.position = c(0.1, 0.2),
     legend.title = element_text(size = 20)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_pred_eq3.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_pred_eq3.pdf'), p,
        width = wid, height = asp * wid)
 
 tmp <- unique(co_eq_pred)
 p <- ggplot() + theme_bw() + gg(mesh) +
-  geom_point(data = as.data.frame(co_stat), aes(x=longitude_st, y=latitude_st), fill= 'firebrick3',
+  geom_point(data = as.data.frame(co_stat), aes(x=longitude_st, y=latitude_st), fill= 'deeppink3',
              size = 2, shape = 24, stroke = 0.7)+
-  geom_point(data = as.data.frame(co_eq), aes(x=longitude_ev, y=latitude_ev), fill= 'cadetblue2',
-             size = 2, shape = 21, stroke = 1.5)+
+  geom_point(data = as.data.frame(co_eq), aes(x=longitude_ev, y=latitude_ev), fill= 'azure2',
+             size = 2, shape = 21, stroke = 1.0)+
   geom_point(data = as.data.frame(co_stat_pred), aes(x=X_stat,y=Y_stat), color = "cyan", size = 1) +
   geom_point(data = as.data.frame(tmp), aes(x=X_ev,y=Y_ev), color = "red", size = 1) +
   labs(x="X (km)", y="Y (km)") +
@@ -3338,8 +3337,7 @@ p <- ggplot() + theme_bw() + gg(mesh) +
   annotate(geom="label", x = tmp$X_ev[2] + 70, y = tmp$Y_ev[2] + 50, label = "EQ 2", size = 4, fill = "white") +
   annotate(geom="label", x = tmp$X_ev[3] + 70, y = tmp$Y_ev[3] + 50, label = "EQ 3", size = 4, fill = "white")
 
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_mesh_pred.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_mesh_pred.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
@@ -3347,11 +3345,11 @@ ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
 
 
 ```r
-data_pred <- read.csv("/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/DATA/data_prediction_line.csv")
-data_dm_comb <- rstan::read_rdump('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/DATA/dm_combined_line_25x25.Rdata')
+data_pred <- read.csv(file.path("DATA", "data_prediction_line.csv"))
+data_dm_comb <- rstan::read_rdump(file.path('DATA', 'dm_combined_line_25x25.Rdata'))
 dm_sparse_c <- as(data_dm_comb$RC,"dgCMatrix")
 
-load(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY','RESULTS', 'results_pred_mswgr_line.Rdata'))
+load(file.path('RESULTS', 'results_pred_mswgr_line.Rdata'))
 
 attach(data_pred)
 b1p = (mag-mh)*(mag<=mh)
@@ -3612,19 +3610,18 @@ ggplot()+
 ```r
 tmp <- unique(co_eq_pred)
 p <- ggplot() + theme_bw() + gg(mesh) +
-  geom_point(data = as.data.frame(co_stat), aes(x=longitude_st, y=latitude_st), fill= 'firebrick3',
+  geom_point(data = as.data.frame(co_stat), aes(x=longitude_st, y=latitude_st), fill= 'deeppink3',
              size = 2, shape = 24, stroke = 0.7)+
-  geom_point(data = as.data.frame(co_eq), aes(x=longitude_ev, y=latitude_ev), fill= 'cadetblue2',
+  geom_point(data = as.data.frame(co_eq), aes(x=longitude_ev, y=latitude_ev), fill= 'azure2',
              size = 2, shape = 21, stroke = 0.7)+
   geom_line(data = as.data.frame(data_pred[data_pred$WESN == 1,c(15,16)]), aes(x=X_stat,y=Y_stat), color = "blue", size = 1.5) +
   geom_line(data = as.data.frame(data_pred[data_pred$WESN == 2,c(15,16)]), aes(x=X_stat,y=Y_stat), color = "red", size = 1.5) +
   geom_point(data = as.data.frame(tmp), aes(x=X_ev,y=Y_ev), fill= 'red',
-             size = 2, shape = 21, stroke = 1.5) +
+             size = 2, shape = 21, stroke = 1.0) +
   labs(x="X (km)", y="Y (km)") +
   theme(axis.title = element_text(size=30), axis.text.y = element_text(size=20),
         axis.text.x = element_text(size=20))
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_mesh_pred_line.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_mesh_pred_line.pdf'), p,
        width = wid, height = asp * wid)
 
 p <- ggplot()+
@@ -3649,8 +3646,7 @@ p <- ggplot()+
     legend.position = c(0.1, 0.2),
     legend.title = element_text(size = 20)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_pred_line.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_pred_line.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
@@ -3683,8 +3679,7 @@ p <- ggplot()+
     legend.position = c(0.1, 0.8),
     legend.title = element_text(size = 20)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_pred_line_sd.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_pred_line_sd.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
@@ -3719,8 +3714,7 @@ p <- ggplot()+
     legend.position = c(0.1, 0.8),
     legend.title = element_text(size = 20)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_pred_line_sd_ns.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_pred_line_sd_ns.pdf'), p,
        width = wid, height = asp * wid)
 
 p <- ggplot()+
@@ -3747,8 +3741,7 @@ p <- ggplot()+
     legend.position = c(0.1, 0.8),
     legend.title = element_text(size = 20)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_pred_line_sd_ns2.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_pred_line_sd_ns2.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
@@ -3779,8 +3772,8 @@ These are not necessarily realistic event or station locations, but are chosen s
 
 
 ```r
-data_pred <- read.csv("/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/DATA/data_prediction_pt.csv")
-data_dm_comb <- rstan::read_rdump('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/DATA/dm_combined_pt_25x25.Rdata')
+data_pred <- read.csv(file.path("DATA", "data_prediction_pt.csv"))
+data_dm_comb <- rstan::read_rdump(file.path('DATA', '/dm_combined_pt_25x25.Rdata'))
 dm_sparse_c <- as(data_dm_comb$RC,"dgCMatrix")
 
 attach(data_pred)
@@ -3917,6 +3910,14 @@ fit_inla_spatial_cell_pred2 <- inla(form_spatial_cell_c2,
                                    control.family=list(initial=12,fixed=TRUE),
                                    control.inla = list(int.strategy = "eb", strategy = "gaussian")
 )
+```
+
+```
+## Warning in inla.model.properties.generic(inla.trim.family(model), mm[names(mm) == : Model 'z' in section 'latent' is marked as 'experimental'; changes may appear at any time.
+##   Use this model with extra care!!! Further warnings are disabled.
+```
+
+```r
 pred_spatial_cell2 <- fit_inla_spatial_cell_pred2$summary.fitted.values[idx_pred,]
 
 # spatial model with event and station constants
@@ -3938,7 +3939,7 @@ fit_inla_spatial_pred2 <- inla(form_spatial2,
 pred_spatial2 <- fit_inla_spatial_pred2$summary.fitted.values[idx_pred,]
 
 ##### correlation of cells
-adj <- read.csv("/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY/DATA/cells_adj.csv")
+adj <- read.csv(file.path("DATA", "cells_adj.csv"))
 cell_idx <- data_dm_comb$cell_idx
 
 rho <- 0.2
@@ -4054,8 +4055,7 @@ p <- ggplot(res, aes(x = model, y = E)) +
     axis.text = element_text(size = 14),
     plot.title = element_text(size = 30)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_phiss.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_phiss.pdf'), p,
        width = wid, height = asp * wid)
 
 
@@ -4081,8 +4081,7 @@ p <- ggplot(res, aes(x = model, y = E)) +
     axis.text = element_text(size = 14),
     plot.title = element_text(size = 30)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_tau.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_tau.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
@@ -4117,8 +4116,7 @@ p <- ggplot(res, aes(x = model, y = E)) +
     axis.text = element_text(size = 14),
     plot.title = element_text(size = 30)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_phis2s.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_phis2s.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
@@ -4172,8 +4170,7 @@ p <- ggplot(res, aes(x = model, y = E, color = sd)) +
   ) +
   guides(color = guide_legend(nrow = 2, byrow = TRUE,title=NULL))
 
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_sd_all.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_sd_all.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
@@ -4221,8 +4218,7 @@ p <- ggplot(res, aes(x = model, y = E)) +
     plot.title = element_text(size = 30),
     strip.text.x = element_text(size = 12)
   )
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_fixed_effects.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_fixed_effects.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
@@ -4234,7 +4230,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.l
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = expression(atop(paste(c[2])))
+  scale_fill_gradient(low = 'red', high = 'yellow', name = expression(atop(paste(c[2])))
                       ,limits = c(-1.8,-1.), breaks = c(-1.8, -1.4, -1)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4248,8 +4244,7 @@ p <- ggplot() +
     legend.position = c(0.1, 0.2)
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "Model 7", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_gs_full.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_gs_full.pdf'), p,
        width = wid, height = asp * wid)
 
 #### full spatial model no random effects
@@ -4258,7 +4253,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_b$summary.random$idx
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = expression(atop(paste(c[2])))
+  scale_fill_gradient(low = 'red', high = 'yellow', name = expression(atop(paste(c[2])))
                       ,limits = c(-1.8,-1.), breaks = c(-1.8, -1.4, -1)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4272,8 +4267,7 @@ p <- ggplot() +
     legend.position = "none"
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "Model 10", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_gs_full_b.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_gs_full_b.pdf'), p,
        width = wid, height = asp * wid)
 
 #### full spatial model no random effects
@@ -4282,7 +4276,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_cell$summary.random$
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = expression(atop(paste(c[2])))
+  scale_fill_gradient(low = 'red', high = 'yellow', name = expression(atop(paste(c[2])))
                       ,limits = c(-1.8,-1.), breaks = c(-1.8, -1.4, -1)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4296,15 +4290,14 @@ p <- ggplot() +
     legend.position = "none"
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "Model 8", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_gs_full_cell.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_gs_full_cell.pdf'), p,
        width = wid, height = asp * wid)
 
 #### ms-wgr
 df_plot <- as.data.frame(cbind(co_df_utm, beta_c2))
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=beta_c2))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = expression(atop(paste(c[2])))
+  scale_fill_gradient(low = 'red', high = 'yellow', name = expression(atop(paste(c[2])))
                       ,limits = c(-1.8,-1.), breaks = c(-1.8, -1.4, -1)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4318,8 +4311,7 @@ p <- ggplot() +
     legend.position = "none"
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "MS-GWR", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_gs_msgwr.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_gs_msgwr.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
@@ -4331,7 +4323,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full$summary.random$idx.v
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = "k"
+  scale_fill_gradient(low = 'red', high = 'yellow', name = "k"
                       ,limits = c(-1.,0.00), breaks = c(-1., -0.5, 0.)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4345,8 +4337,7 @@ p <- ggplot() +
     legend.position = c(0.1, 0.2)
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "Model 7", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_vs_full.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_vs_full.pdf'), p,
        width = wid, height = asp * wid)
 
 #### full spatial model no random effects
@@ -4357,7 +4348,7 @@ field.proj[field.proj > 0] <- 0
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = "k"
+  scale_fill_gradient(low = 'red', high = 'yellow', name = "k"
                       ,limits = c(-1.,0.00), breaks = c(-1., -0.5, 0.)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4371,8 +4362,7 @@ p <- ggplot() +
     legend.position = "none"
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "Model 10", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_vs_full_b.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_vs_full_b.pdf'), p,
        width = wid, height = asp * wid)
 
 #### full spatial model no random effects
@@ -4381,7 +4371,7 @@ field.proj <- inla.mesh.project(proj, fit_inla_spatial_full_cell$summary.random$
 df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = "k"
+  scale_fill_gradient(low = 'red', high = 'yellow', name = "k"
                      ,limits = c(-1.,0.00), breaks = c(-1., -0.5, 0.)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4395,15 +4385,14 @@ p <- ggplot() +
     legend.position = "none"
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "Model 8", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_vs_full_cell.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_vs_full_cell.pdf'), p,
        width = wid, height = asp * wid)
 
 #### ms-gwr
 df_plot <- as.data.frame(cbind(co_df_utm, beta_k))
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=beta_k))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = "k"
+  scale_fill_gradient(low = 'red', high = 'yellow', name = "k"
                       ,limits = c(-1., 0.00), breaks = c(-1., -0.5, 0.)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4417,8 +4406,7 @@ p <- ggplot() +
     legend.position = "none"
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "MS-GWR", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_vs_msgwr.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_vs_msgwr.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
@@ -4433,7 +4421,7 @@ field.proj[field.proj > 0.002] <- 0.002
 
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = expression(atop(paste(c[3])))
+  scale_fill_gradient(low = 'red', high = 'yellow', name = expression(atop(paste(c[3])))
                       ,limits = c(-0.01,0.002), breaks = c(-0.01, -0.004, 0.002)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4447,8 +4435,7 @@ p <- ggplot() +
     legend.position = c(0.13, 0.23)
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "Model 7", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_linr_full.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_linr_full.pdf'), p,
        width = wid, height = asp * wid)
 
 #### full spatial model no random effects
@@ -4460,7 +4447,7 @@ df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = expression(atop(paste(c[3])))
+  scale_fill_gradient(low = 'red', high = 'yellow', name = expression(atop(paste(c[3])))
                       ,limits = c(-0.01,0.002), breaks = c(-0.01, -0.004, 0.002)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4474,8 +4461,7 @@ p <- ggplot() +
     legend.position = "none"
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "Model 10", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_linr_full_b.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_linr_full_b.pdf'), p,
        width = wid, height = asp * wid)
 
 #### full spatial model cells
@@ -4488,7 +4474,7 @@ df_plot <- data.frame(x = cells2$X0, y = cells2$X1,
 
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x, y=y, fill=z))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = expression(atop(paste(c[3])))
+  scale_fill_gradient(low = 'red', high = 'yellow', name = expression(atop(paste(c[3])))
                      ,limits = c(-0.01,0.002), breaks = c(-0.01, -0.004, 0.002)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4502,8 +4488,7 @@ p <- ggplot() +
     legend.position = "none"
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "Model 8", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_linr_full_cell.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_linr_full_cell.pdf'), p,
        width = wid, height = asp * wid)
 
 #### ms-gwr
@@ -4514,7 +4499,7 @@ df_plot <- as.data.frame(cbind(co_df_utm, field.proj))
 
 p <- ggplot() + 
   geom_tile(df_plot, mapping = aes(x=x1, y=x2, fill=field.proj))+
-  scale_fill_gradientn(colours = c("darkblue", "dodgerblue1", "cadetblue2", "white"), name = expression(atop(paste(c[3])))
+  scale_fill_gradient(low = 'red', high = 'yellow', name = expression(atop(paste(c[3])))
                       ,limits = c(-0.01,0.002), breaks = c(-0.01, -0.004, 0.002)
   ) +
   labs(x = "UTM X (KM)", y = "UTM Y (KM)") +
@@ -4528,23 +4513,21 @@ p <- ggplot() +
     legend.position = "none"
   ) +
   annotate(geom="label", x = 600, y = 5200, label = "MS-GWR", size = 10, fill = "white")
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_spatial_linr_msgwr.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_spatial_linr_msgwr.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
 
 ```r
 p <- ggplot() + theme_bw() + gg(mesh) +
-  geom_point(data = as.data.frame(co_stat), aes(x=longitude_st, y=latitude_st), fill= 'firebrick3',
+  geom_point(data = as.data.frame(co_stat), aes(x=longitude_st, y=latitude_st), fill= 'deeppink3',
              size = 2, shape = 24, stroke = 0.7)+
-  geom_point(data = as.data.frame(co_eq), aes(x=longitude_ev, y=latitude_ev), fill= 'cadetblue2',
-             size = 2, shape = 21, stroke = 1.5)+
+  geom_point(data = as.data.frame(co_eq), aes(x=longitude_ev, y=latitude_ev), fill= 'azure2',
+             size = 2, shape = 21, stroke = 1.)+
   labs(x="X (km)", y="Y (km)") +
   theme(axis.title = element_text(size=30), axis.text.y = element_text(size=20),
         axis.text.x = element_text(size=20))
-ggsave(file.path('/Users/nico/GROUNDMOTION/PROJECTS/NONERGODIC/ITALY',
-                 'RESULTS','PLOTS','plot_mesh.pdf'), p,
+ggsave(file.path('RESULTS','PLOTS','plot_mesh.pdf'), p,
        width = wid, height = asp * wid)
 ```
 
