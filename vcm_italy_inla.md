@@ -2,7 +2,7 @@
 title: "A Reevaluation of the Italian PGA Data in a Varying Coefficient Ground-Motion Model with INLA"
 author:
   - Nicolas Kuehn^[Unversity of California, Los Angeles, kuehn@ucla.edu]
-date: "14 September, 2021"
+date: "15 September, 2021"
 output:
   html_document:
   #pdf_document:
@@ -186,8 +186,8 @@ grid_inside_utm = grid_utm[shape_utm_spatial,]
 coords_utm = grid_inside_utm@coords
 coords_df_utm = as.data.frame(coords_utm)
 
-# read n data file with event and station ids
-# correcte for Vs30 differences between stations of same location
+# read in data file with event and station ids
+# corrected for Vs30 differences between stations of same location
 data <- read.csv(file.path('DATA', 'italian_data_pga_id_utm_stat.csv'))
 #### Cell-specific distances are computed outside of R
 data_dm <- rstan::read_rdump(file.path('DATA', 'dm_25x25.Rdata'))
@@ -939,7 +939,7 @@ beta_c3 = result$beta_e[2,]
 beta_c3_coord = cbind(coords_utm, beta_c3)
 beta_c3_coord = as.data.frame(beta_c3_coord)
 
-time_msgwr <- 14189.787
+time_msgwr <- 11434.796 # from vcm_itla_msgwr
 ```
 
 
@@ -1041,7 +1041,7 @@ Table: Information Criteria (WAIC and DIC) for different INLA models
 |spatial eq/stat constants + gs + vs + cells    | -1953.83| -1900.03|       617.32|
 |spatial eq/stat constants + gs + cells         | -1956.41| -1901.44|       484.67|
 |spatial eq/stat constants + vs + cells         | -1849.28| -1806.79|      2091.22|
-|MS-GWR                                         |       NA|       NA|     14189.79|
+|MS-GWR                                         |       NA|       NA|     11434.80|
 
 All spatial models are an improvement over the simple ergodic model that only includes event and station terms.
 The spatial model that only includes spatially varying geometrical spreading, $V_{S30}$-scaling, ad linear R-scaling performs than the ergodic random effects model.
@@ -1423,7 +1423,7 @@ Table: Estimated standard deviations (mean of posterior distribution).
 |spatial model, no random effects/constants     | 0.2194172|        NA|        NA|
 |spatial eq/stat constants + cells              | 0.1751167| 0.0862315| 0.1573930|
 |spatial eq/stat constants + cells, integration | 0.1752461| 0.0918765| 0.1579738|
-|MS-GWR residuals                               | 0.2003396| 0.0916589| 0.2066721|
+|MS-GWR residuals                               | 0.2003282| 0.0916550| 0.2066760|
 |ITA18                                          | 0.2205820| 0.1559880| 0.2000990|
 
 ## Model Comparison based on Cross-Validation

@@ -865,7 +865,7 @@ beta_c3 = result$beta_e[2,]
 beta_c3_coord = cbind(coords_utm, beta_c3)
 beta_c3_coord = as.data.frame(beta_c3_coord)
 
-time_msgwr <- 11434.796
+time_msgwr <- 11434.796 # from vcm_itla_msgwr
 ```
 
 ``` {r ms-gwr-residuals}
