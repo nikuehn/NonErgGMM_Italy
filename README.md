@@ -4,3 +4,5 @@ This repository contains code and figures to reproduce most of the analyses in K
 The files "vcm_italy_inla" contain R-code to read the data, and calculate the spatial INLA models.
 They also contain code to perform some comparisons, and plot results.
 The files "vcm_italy_msgwr" calculate results for the msgwr method.
+
+The html files can be viewed by copying the address and inserting it into https://htmlpreview.github.io/.
