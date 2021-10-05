@@ -2,7 +2,7 @@
 title: "A Reevaluation of the Italian PGA Data in a Varying Coefficient Ground-Motion Model with INLA"
 author:
   - Nicolas Kuehn^[Unversity of California, Los Angeles, kuehn@ucla.edu]
-date: "15 September, 2021"
+date: "05 October, 2021"
 output:
   html_document:
   #pdf_document:
@@ -3516,12 +3516,12 @@ df_plot_ns <- as.data.frame(cbind(data_pred$EQID, data_pred$WESN, data_pred$JB_c
 names(df_plot_ns)[c(1,2,3)] <- c('EQID', 'WESN', 'R')
 
 df_plot_c <- as.data.frame(cbind(data_pred$EQID, data_pred$WESN, data_pred$JB_complete,
-                               prediction$y0, sqrt(prediction$s0 + 1/fit_inla_resid$summary.hyperpar$mean[3]),
+                               prediction$y0, sqrt(prediction$var0 + 1/fit_inla_resid$summary.hyperpar$mean[3]),
                                pred_spatial_cell))
 names(df_plot_c)[c(1,2,3,4,5)] <- c('EQID', 'WESN', 'R', 'Y_gwr', 'SD_gwr')
 
 df_plot_c_ns <- as.data.frame(cbind(data_pred$EQID, data_pred$WESN, data_pred$JB_complete,
-                               prediction$y0, sqrt(prediction$s0), 
+                               prediction$y0, sqrt(prediction$var0), 
                                pred_spatial_cell_ns))
 names(df_plot_c_ns)[c(1,2,3,4,5)] <- c('EQID', 'WESN', 'R', 'Y_gwr', 'SD_gwr')
 
@@ -3987,18 +3987,6 @@ ggplot(df_plot) +
 ```
 
 <img src="pictures/plot-predict2-1.png" width="50%" /><img src="pictures/plot-predict2-2.png" width="50%" />
-
-# Some Remarks
-
-According to @Caramenti2020 and @Lanzano2021, MS-GWR has some advantages
-
-* It is easier to understand
-  - maybe true; a local weighted model is easy to understand, but a GP (basically a large multi-normal is not hard)
-* it is non-parametric (meaning no distribution for the response is assumed)
-  - that is true, but kind of irrelevant, since for a GMM one must make some distributional assumption (a GMM provides the gistribution of GM, not just a median prediction)
- 
-Based on this investigation, GP based VCMs fit with INLA fit the data better (have lower generalization error and higher loglikelihood based on 5fold CV).
-Another bgh advantage is time; CV for MS-GWR takes mre time than for the 6 INLA models (four of which are spatial models).
 
 # Some additional plots 
 
